@@ -38,9 +38,33 @@ void* mymalloc(size_t size, char* file, int line) {
     if (!heap_initialized) {
         heap_initialized = 1;
         atexit(leak_detect_helper);
-        size_t *initial_head = (size_t*) &heap.bytes[0];
-        *initial_head = MEMSIZE; // set the initial head to the size of the heap
+        size_t *initial_head = (size_t*) &heap.bytes;
+        *initial_head = MEMSIZE|0; // set the initial head to the size of the heap
     }
-
+    if (size == 0) {
+        return NULL;
+    }
+    int curr_chunk = 0;
+    size_t padded_size = align(size);
+    size_t total_memory_needed = padded_size + sizeof(size_t);
+    while (curr_chunk < MEMSIZE) {
+        size_t *curr_header = (size_t *)&heap.bytes[curr_chunk];
+        size_t curr_size = *curr_header & ~7;
+        int empty = *curr_header & 1;
+        if (empty && curr_size >= total_memory_needed){
+            size_t excess_memory = curr_size - total_memory_needed;
+            if (excess_memory >= (sizeof(size_t) + 8)){ // splitting the header if excess memory is big enough
+                *curr_header = total_memory_needed|1;
+                size_t *new_header = (size_t *)&heap.bytes[curr_chunk + total_memory_needed];
+                *new_header = excess_memory|0;
+            }
+            else{
+                *curr_header = curr_size|1;
+            }
+            return (void*)&heap.bytes[curr_chunk + sizeof(size_t)];
+        }
+        curr_chunk += curr_size;
+    }
+    fprintf(stderr, "malloc: Unable to allocate %zu bytes (%s:%d)\n", size, file, line);
     return NULL;
 }
