@@ -1,5 +1,8 @@
+#include <stdlib.h>
 #include "mymalloc.h"
 #include <stdio.h>
+
+
 // from writeup
 #define MEMSIZE 4096
 static union {
@@ -19,7 +22,7 @@ void leak_detect_helper(void) { // detects leaks and leak size
         if (current_size == 0) {
             break;
         }
-        if (!(*current_head & 1)) { // if the block is not allocated
+        if (*current_head & 1) {  // if allocated (leaked)
             num_bytes_leaked += current_size - sizeof(size_t);
             num_blocks_leaked++;
         }
@@ -31,7 +34,7 @@ void leak_detect_helper(void) { // detects leaks and leak size
 }
 
 size_t align(size_t size){ // aligns the size to the nearest multiple of 8
-    return (size + sizeof(8) - 1) & ~(sizeof(8) - 1);
+    return (size + 7) & ~7;
 }
 
 void* mymalloc(size_t size, char* file, int line) {
@@ -51,7 +54,7 @@ void* mymalloc(size_t size, char* file, int line) {
         size_t *curr_header = (size_t *)&heap.bytes[curr_chunk];
         size_t curr_size = *curr_header & ~7;
         int empty = *curr_header & 1;
-        if (empty && curr_size >= total_memory_needed){
+        if (!empty && curr_size >= total_memory_needed) {
             size_t excess_memory = curr_size - total_memory_needed;
             if (excess_memory >= (sizeof(size_t) + 8)){ // splitting the header if excess memory is big enough
                 *curr_header = total_memory_needed|1;
@@ -67,4 +70,48 @@ void* mymalloc(size_t size, char* file, int line) {
     }
     fprintf(stderr, "malloc: Unable to allocate %zu bytes (%s:%d)\n", size, file, line);
     return NULL;
+}
+
+void myfree(void *ptr, char *file, int line) {
+    // reject obvious non-heap pointers
+    if (ptr == NULL || (char*)ptr < heap.bytes || (char*)ptr >= heap.bytes + MEMSIZE) {
+        fprintf(stderr, "free: Inappropriate pointer (%s:%d)\n", file, line);
+        exit(2);
+    }
+
+    // walk the heap to find a chunk whose payload matches ptr
+    int offset = 0;
+    while (offset < MEMSIZE) {
+        size_t *header = (size_t *)&heap.bytes[offset];
+        size_t size = *header & ~7;
+        if (size == 0) break;
+
+        void *payload = (void *)&heap.bytes[offset + sizeof(size_t)];
+
+        if (payload == ptr) {
+            // found the chunk — now check it's actually allocated
+            if (!(*header & 1)) {
+                fprintf(stderr, "free: Inappropriate pointer (%s:%d)\n", file, line);
+                exit(2);
+            }
+            // mark free
+            *header = size & ~1;
+
+            // coalesce with next chunk if it's also free
+            int next_offset = offset + size;
+            if (next_offset < MEMSIZE) {
+                size_t *next_header = (size_t *)&heap.bytes[next_offset];
+                size_t next_size = *next_header & ~7;
+                if (next_size > 0 && !(*next_header & 1)) {
+                    *header = (size + next_size) & ~1;
+                }
+            }
+            return;
+        }
+        offset += size;
+    }
+
+    // ptr didn't match any chunk payload start
+    fprintf(stderr, "free: Inappropriate pointer (%s:%d)\n", file, line);
+    exit(2);
 }
