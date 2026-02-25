@@ -1,0 +1,65 @@
+Names: TODO
+NetIDs: TODO
+
+== Design Notes ==
+
+mymalloc/myfree implementation using a 4096-byte static heap with implicit
+free list. Each chunk has an 8-byte header (size_t) where bit 0 encodes
+allocation status and the remaining bits encode chunk size (always 8-byte
+aligned). Minimum chunk size is 16 bytes (8 header + 8 payload).
+
+Allocation: first-fit scan with block splitting when remainder >= 16 bytes.
+All payloads are 8-byte aligned.
+
+Deallocation: validates pointer by walking the chunk list, then marks the
+chunk free and coalesces with adjacent free neighbors (both forward and
+backward).
+
+Leak detection: registered via atexit() during heap initialization. Walks
+the chunk list at exit and reports any still-allocated chunks.
+
+Error detection:
+  - free() with non-heap pointer -> exit(2)
+  - free() with pointer not at chunk start -> exit(2)
+  - double free -> exit(2)
+  - malloc() failure -> returns NULL, prints to stderr
+
+== Test Plan ==
+
+correctness.c tests the following requirements:
+
+1. Allocation integrity: allocate 64 objects, fill with distinct byte
+   patterns, verify no overlap between allocated objects.
+2. Free reuse: fill memory, verify further allocs fail, free one object,
+   verify alloc succeeds in the freed space.
+3. Forward coalescing: allocate 3 chunks, free all, verify a single large
+   allocation succeeds (proving adjacent free chunks were merged).
+4. Backward coalescing: free chunks in non-adjacent order (a, b, c with
+   gaps), verify full coalescing produces one large free block.
+5. Bad pointer detection: free() with a stack pointer exits with status 2.
+6. Middle pointer detection: free(p+1) exits with status 2.
+7. Double free detection: freeing the same pointer twice exits with status 2.
+8. malloc(0) returns NULL.
+9. Alignment: all returned pointers are 8-byte aligned.
+10. Leak detection: deliberately leaked objects trigger the atexit handler
+    (verified via fork + exit status check).
+
+memtest.c (provided): allocates 64 objects filling the heap, writes distinct
+patterns, verifies data integrity.
+
+== Test Programs ==
+
+  make              - builds memgrind, memtest, correctness
+  ./memgrind        - stress test: 5 workloads x 50 runs, reports avg time
+  ./memtest         - basic data integrity test (no arguments)
+  ./correctness     - comprehensive correctness test suite (no arguments)
+
+== memgrind Workloads ==
+
+Task 1: malloc() and immediately free() a 1-byte object, 120 times.
+Task 2: malloc() 120 1-byte objects into an array, then free() all 120.
+Task 3: Randomly interleave malloc/free until 120 allocs done, then free rest.
+Task 4: LIFO stack - allocate 120 random-sized (1-16 byte) objects, free in
+        reverse order.
+Task 5: Linked list simulation - build, traverse, and tear down 12-node lists
+        10 times per run.
