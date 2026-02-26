@@ -33,7 +33,7 @@ void leak_detect_helper(void) { // detects leaks and leak size
     }
 }
 
-size_t align(size_t size){ // aligns the size to the nearest multiple of 8
+size_t align_size(size_t size){ // aligns the size to the nearest multiple of 8
     return (size + 7) & ~7;
 }
 
@@ -48,7 +48,7 @@ void* mymalloc(size_t size, char* file, int line) {
         return NULL;
     }
     int curr_chunk = 0;
-    size_t padded_size = align(size);
+    size_t padded_size = align_size(size);
     size_t total_memory_needed = padded_size + sizeof(size_t);
     while (curr_chunk < MEMSIZE) {
         size_t *curr_header = (size_t *)&heap.bytes[curr_chunk];
@@ -73,13 +73,12 @@ void* mymalloc(size_t size, char* file, int line) {
 }
 
 void myfree(void *ptr, char *file, int line) {
-    // reject obvious non-heap pointers
+    // exit early if invalid pointer or if ptr is outside the heap bounds
     if (ptr == NULL || (char*)ptr < heap.bytes || (char*)ptr >= heap.bytes + MEMSIZE) {
         fprintf(stderr, "free: Inappropriate pointer (%s:%d)\n", file, line);
         exit(2);
     }
-
-    // walk the heap to find a chunk whose payload matches ptr
+    // go through the whole heap to find the chunk that contains the pointer
     int offset = 0;
     while (offset < MEMSIZE) {
         size_t *header = (size_t *)&heap.bytes[offset];
@@ -89,12 +88,12 @@ void myfree(void *ptr, char *file, int line) {
         void *payload = (void *)&heap.bytes[offset + sizeof(size_t)];
 
         if (payload == ptr) {
-            // found the chunk — now check it's actually allocated
+            // check if the chunk is already free
             if (!(*header & 1)) {
                 fprintf(stderr, "free: Inappropriate pointer (%s:%d)\n", file, line);
                 exit(2);
             }
-            // mark free
+            // if not, mark it as free
             *header = size & ~1;
 
             // coalesce with next chunk if it's also free
@@ -110,8 +109,6 @@ void myfree(void *ptr, char *file, int line) {
         }
         offset += size;
     }
-
-    // ptr didn't match any chunk payload start
     fprintf(stderr, "free: Inappropriate pointer (%s:%d)\n", file, line);
     exit(2);
 }

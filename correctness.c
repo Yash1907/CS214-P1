@@ -9,7 +9,6 @@
 #define MEMSIZE 4096
 #define HEADERSIZE 8
 
-// Test 1: free() deallocates memory (can re-malloc after freeing)
 void test_free_deallocates() {
     void *p = malloc(100);
     free(p);
@@ -22,7 +21,6 @@ void test_free_deallocates() {
     }
 }
 
-// Test 2: malloc() reserves unallocated memory (no overlap between objects)
 void test_no_overlap() {
     int errors = 0;
     char *a = malloc(64);
@@ -41,17 +39,12 @@ void test_no_overlap() {
     free(b);
 }
 
-// Test 3: coalescing — free two adjacent chunks, then allocate something larger than either
 void test_coalesce() {
-    // allocate three chunks, free the first two, then try to allocate something
-    // larger than either one alone but small enough to fit in their combined space
     char *a = malloc(100);
     char *b = malloc(100);
-    char *c = malloc(100);  // anchor so b's neighbor isn't the end of heap
+    char *c = malloc(100);  
     free(a);
     free(b);
-    // a and b together give ~200 bytes of payload + 1 freed header
-    // so requesting 150 bytes should only work if they coalesced
     char *d = malloc(150);
     if (d == NULL) {
         printf("FAIL test_coalesce: could not allocate from coalesced space\n");
@@ -62,9 +55,7 @@ void test_coalesce() {
     free(c);
 }
 
-// Test 4: malloc returns NULL and prints error when out of memory
 void test_out_of_memory() {
-    // exhaust the heap
     void *ptrs[256];
     int i;
     for (i = 0; i < 256; i++) {

@@ -9,7 +9,6 @@
 
 #define RUNS 50
 
-// Task 1: malloc and immediately free a 1-byte object, 120 times
 void task1() {
     for (int i = 0; i < 120; i++) {
         void *p = malloc(1);
@@ -17,7 +16,6 @@ void task1() {
     }
 }
 
-// Task 2: malloc 120 1-byte objects, then free them all
 void task2() {
     void *ptrs[120];
     for (int i = 0; i < 120; i++) {
@@ -28,7 +26,6 @@ void task2() {
     }
 }
 
-// Task 3: randomly alloc/free until 120 allocations made, then free remaining
 void task3() {
     void *ptrs[120];
     int total = 0;
@@ -51,7 +48,6 @@ void task3() {
     }
 }
 
-// Task 4: build a linked list, traverse it, then free it
 typedef struct Node {
     int value;
     struct Node *next;
@@ -61,7 +57,6 @@ void task4() {
     Node *head = NULL;
     Node *tail = NULL;
 
-    // build a list of 20 nodes
     for (int i = 0; i < 20; i++) {
         Node *n = malloc(sizeof(Node));
         n->value = i;
@@ -73,14 +68,10 @@ void task4() {
             tail = n;
         }
     }
-
-    // traverse
     Node *cur = head;
     while (cur != NULL) {
         cur = cur->next;
     }
-
-    // free
     cur = head;
     while (cur != NULL) {
         Node *next = cur->next;
@@ -89,7 +80,6 @@ void task4() {
     }
 }
 
-// Task 5: mixed allocations of varying sizes, simulating a realistic workload
 void task5() {
     void *ptrs[20];
     int sizes[] = {8, 16, 24, 32, 48, 64, 8, 16, 24, 32,
@@ -98,7 +88,6 @@ void task5() {
     for (int i = 0; i < 20; i++) {
         ptrs[i] = malloc(sizes[i]);
     }
-    // free in reverse order to exercise coalescing
     for (int i = 19; i >= 0; i--) {
         free(ptrs[i]);
     }
